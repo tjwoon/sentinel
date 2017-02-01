@@ -2,9 +2,13 @@
 
 // Imports ---------------------------------------------------------------------
 
-const Jimp = require("jimp")
+const fs = require("fs") // TMP for testing only
+
+const sharp = require("sharp") // MUST require `sharp` before `canvas`!
+    // See https://github.com/lovell/sharp/issues/371
+const Canvas = require("canvas")
+const Image = Canvas.Image
 const Q = require("q")
-const sharp = require("sharp")
 const v4l2camera = require("v4l2camera")
 
 const config = require("./config")
@@ -70,10 +74,15 @@ function doIt(i)
 {
     console.log(new Date + " START " + i + " --------------------") // TMP
     return generateComposite()
-    .then((image) => {
+    .then((canvas) => {
         console.log(new Date + " Writing to disk") // TMP
-        image.write("test-"+i+".jpg")
+        let out = fs.createWriteStream("test-"+i+".jpg")
+        canvas.syncJPEGStream().pipe(out)
         console.log(new Date + " DONE!") // TMP
+
+        return Q.Promise((resolve) => {
+            fs.on("finish", () => resolve())
+        })
     })
     .catch((err) => {
         console.log("ERROR: "+err) // TMP
@@ -101,7 +110,7 @@ function cleanup ()
 }
 
 // Grab a frame from the given camera, with a Promise API.
-// :: (v4l2camera) -> Promise<Jimp, void>
+// :: (v4l2camera) -> Promise<Image, void>
 function grabFrame (cam)
 {
     return Q.Promise((resolve, reject) => {
@@ -115,10 +124,10 @@ function grabFrame (cam)
                 sharp(new Buffer(cam.frameRaw()))
                 .jpeg().toBuffer()
                 .then((buffer) => {
-                    Jimp.read(buffer, (err, image) => {
-                        if(err) reject(err)
-                        else resolve(image)
-                    })
+                    let img = new Image
+                    img.src = buffer
+                    img.dataMode = Image.MODE_MIME
+                    resolve(img)
                 })
             }
         })
@@ -127,32 +136,25 @@ function grabFrame (cam)
 
 // Grabs a frame from all cameras, then composite them into one large image.
 // Returns a promise for the composite image.
-// :: (void) -> Promise<Jimp, anything>
+// :: (void) -> Promise<Canvas, anything>
 function generateComposite ()
 {
-    return createBlankImage(config.outputWidth, config.outputHeight)
-    .then((canvas) => {
-        return Q.all(cameras.map(grabFrame))
-        .then((frames) => {
-            frames.forEach((frame, i) => {
-                let cameraConfig = config.cameras[i]
-                canvas.blit(frame, cameraConfig.targetX, cameraConfig.targetY)
-            })
+    let canvas = new Canvas(config.outputWidth, config.outputHeight)
+    let ctx = canvas.getContext("2d")
 
-            return canvas
+    return Q.all(cameras.map(grabFrame))
+    .then((frames) => {
+        frames.forEach((frame, i) => {
+            let cameraConfig = config.cameras[i]
+            ctx.drawImage(
+                frame,
+                cameraConfig.targetX,
+                cameraConfig.targetY,
+                cameraConfig.width,
+                cameraConfig.height
+            )
         })
-    })
-}
 
-// Creates a blank canvas with optional background color (default=black).
-// :: (int, int) -> Promise<Jimp, error>
-// :: (int, int, int) -> Promise<Jimp, error>
-function createBlankImage (width, height, background=0x000000FF)
-{
-    return Q.Promise((resolve, reject) => {
-        new Jimp(width, height, background, (err, image) => {
-            if(err) reject(err)
-            else resolve(image)
-        })
+        return canvas
     })
 }

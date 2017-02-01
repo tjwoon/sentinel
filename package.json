@@ -9,7 +9,7 @@
   "author": "TJ Woon <tj@cloudsky.org>",
   "license": "UNLICENSED",
   "dependencies": {
-    "jimp": "^0.2.27",
+    "canvas": "^1.6.2",
     "q": "^1.4.1",
     "sharp": "^0.17.1",
     "v4l2camera": "^1.0.4"
