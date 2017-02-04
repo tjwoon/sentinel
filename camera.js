@@ -8,6 +8,7 @@ const sharp = require("sharp") // MUST require `sharp` before `canvas`!
     // See https://github.com/lovell/sharp/issues/371
 const Canvas = require("canvas")
 const Image = Canvas.Image
+const moment = require("moment")
 const Q = require("q")
 const v4l2camera = require("v4l2camera")
 
@@ -110,13 +111,20 @@ function cleanup ()
 }
 
 // Grab a frame from the given camera, with a Promise API.
-// :: (v4l2camera) -> Promise<Image, void>
+// :: (v4l2camera) -> Promise<Object, void>
+// where Object :: {
+//      "camera": v4l2camera,
+//      "image": Image,
+//      "timestamp": Date,
+// }
 function grabFrame (cam)
 {
     return Q.Promise((resolve, reject) => {
         cam.capture((success) => {
             if(!success) reject()
             else {
+                let captureTime = new Date
+
                 // We need to use the Sharp library to parse the JPEG from
                 // v4l2camera, because:
                 // 1. It is an MJPEG frame, which is not entirely valid JPEG.
@@ -127,7 +135,11 @@ function grabFrame (cam)
                     let img = new Image
                     img.src = buffer
                     img.dataMode = Image.MODE_MIME
-                    resolve(img)
+                    resolve({
+                        image: img,
+                        timestamp: captureTime,
+                        camera: cam,
+                    })
                 })
             }
         })
@@ -139,19 +151,29 @@ function grabFrame (cam)
 // :: (void) -> Promise<Canvas, anything>
 function generateComposite ()
 {
+    const textMargin = 10 // space between text and edge of image
+
     let canvas = new Canvas(config.outputWidth, config.outputHeight)
     let ctx = canvas.getContext("2d")
+    ctx.antialias = "none"
+    ctx.font = "16px normal \"sans-serif\""
+    ctx.textDrawingMode = "glyph"
 
     return Q.all(cameras.map(grabFrame))
-    .then((frames) => {
-        frames.forEach((frame, i) => {
+    .then((captures) => {
+        captures.forEach((capture, i) => {
             let cameraConfig = config.cameras[i]
             ctx.drawImage(
-                frame,
+                capture.image,
                 cameraConfig.targetX,
                 cameraConfig.targetY,
-                cameraConfig.width,
-                cameraConfig.height
+                capture.camera.width,
+                capture.camera.height
+            )
+            ctx.fillText(
+                moment(capture.timestamp).format("YYYY-MM-DD HH:mm:ss.SSS"),
+                cameraConfig.targetX + textMargin,
+                cameraConfig.targetY + capture.camera.height - textMargin
             )
         })
 
