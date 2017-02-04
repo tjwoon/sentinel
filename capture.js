@@ -111,36 +111,57 @@ function cleanup ()
 }
 
 // Grab a frame from the given camera, with a Promise API.
+// If the optional timeout is reached before the frame is captured, rejects
+// the promise.
 // :: (v4l2camera) -> Promise<Object, void>
+// :: (v4l2camera, int) -> Promise<Object, void>
 // where Object :: {
 //      "camera": v4l2camera,
 //      "image": Image,
 //      "timestamp": Date,
 // }
-function grabFrame (cam)
+function grabFrame (cam, timeout)
 {
     return Q.Promise((resolve, reject) => {
-        cam.capture((success) => {
-            if(!success) reject()
-            else {
-                let captureTime = new Date
+        let isDone = false
+        var timer
 
-                // We need to use the Sharp library to parse the JPEG from
-                // v4l2camera, because:
-                // 1. It is an MJPEG frame, which is not entirely valid JPEG.
-                // 2. It seems to be slightly broken even if we patch it to JPEG.
-                sharp(new Buffer(cam.frameRaw()))
-                .jpeg().toBuffer()
-                .then((buffer) => {
-                    let img = new Image
-                    img.src = buffer
-                    img.dataMode = Image.MODE_MIME
-                    resolve({
-                        image: img,
-                        timestamp: captureTime,
-                        camera: cam,
+        if(timeout != null) {
+            timer = setTimeout(() => {
+                if(!isDone) {
+                    isDone = true
+                    reject(new Error("Frame capture timed out after "+timeout+"ms."))
+                }
+            }, timeout)
+        }
+
+        cam.capture((success) => {
+            if(isDone) return
+            else {
+                if(timer !== undefined) clearTimeout(timer)
+                isDone = true
+
+                if(!success) reject()
+                else {
+                    let captureTime = new Date
+
+                    // We need to use the Sharp library to parse the JPEG from
+                    // v4l2camera, because:
+                    // 1. It is an MJPEG frame, which is not entirely valid JPEG.
+                    // 2. It seems to be slightly broken even if we patch it to JPEG.
+                    sharp(new Buffer(cam.frameRaw()))
+                    .jpeg().toBuffer()
+                    .then((buffer) => {
+                        let img = new Image
+                        img.src = buffer
+                        img.dataMode = Image.MODE_MIME
+                        resolve({
+                            image: img,
+                            timestamp: captureTime,
+                            camera: cam,
+                        })
                     })
-                })
+                }
             }
         })
     })
@@ -159,7 +180,7 @@ function generateComposite ()
     ctx.font = "16px normal \"sans-serif\""
     ctx.textDrawingMode = "glyph"
 
-    return Q.all(cameras.map(grabFrame))
+    return Q.all(cameras.map((cam) => grabFrame(cam)))
     .then((captures) => {
         captures.forEach((capture, i) => {
             let cameraConfig = config.cameras[i]
