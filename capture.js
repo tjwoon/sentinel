@@ -89,16 +89,18 @@ function doIt(i)
         console.log("ERROR: "+err) // TMP
     })
 }
-doIt(0)
-.then(() => doIt(1))
-.then(() => doIt(2))
-.then(() => doIt(3))
-.then(() => doIt(4))
-.then(() => doIt(5))
-.then(() => doIt(6))
-.then(() => doIt(7))
-.then(() => doIt(8))
-.then(() => doIt(9))
+setTimeout(() => { // wait for cameras to finish starting
+    doIt(0)
+    .then(() => doIt(1))
+    .then(() => doIt(2))
+    .then(() => doIt(3))
+    .then(() => doIt(4))
+    .then(() => doIt(5))
+    .then(() => doIt(6))
+    .then(() => doIt(7))
+    .then(() => doIt(8))
+    .then(() => doIt(9))
+}, 5000)
 
 // Helpers ---------------------------------------------------------------------
 
@@ -130,7 +132,15 @@ function grabFrame (cam, timeout)
             timer = setTimeout(() => {
                 if(!isDone) {
                     isDone = true
-                    reject(new Error("Frame capture timed out after "+timeout+"ms."))
+                    reject(
+                        new Error(
+                            "Frame capture timed out at "
+                            + dateToString()
+                            + ", after "
+                            + timeout
+                            + "ms."
+                        )
+                    )
                 }
             }, timeout)
         }
@@ -167,6 +177,23 @@ function grabFrame (cam, timeout)
     })
 }
 
+// Same as grabFrame(), except the promise will be Resolved with any error
+// instead of being rejected.
+// :: (...) -> Promise<{Object|Error}>
+function grabFrameOrError ()
+{
+    return grabFrame.apply(this, arguments)
+    .catch((err) => err)
+}
+
+// Formats a Date or moment-compatible value to a datetime string.
+// :: () -> String
+// :: (Date) -> String
+function dateToString (d)
+{
+    return moment(d).format("YYYY-MM-DD HH:mm:ss.SSS")
+}
+
 // Grabs a frame from all cameras, then composite them into one large image.
 // Returns a promise for the composite image.
 // :: (void) -> Promise<Canvas, anything>
@@ -177,29 +204,33 @@ function generateComposite ()
     let canvas = new Canvas(config.outputWidth, config.outputHeight)
     let ctx = canvas.getContext("2d")
     ctx.antialias = "none"
+    ctx.fillStyle = "#ff0000"
     ctx.font = "16px normal \"sans-serif\""
     ctx.textDrawingMode = "glyph"
 
-    return Q.all(cameras.map((cam) => grabFrame(cam)))
+    return Q.all(cameras.map((cam) => grabFrameOrError(cam, 200)))
     .then((captures) => {
         captures.forEach((capture, i) => {
             let cameraConfig = config.cameras[i]
-            ctx.drawImage(
-                capture.image,
-                cameraConfig.sourceX,
-                cameraConfig.sourceY,
-                cameraConfig.sourceWidth,
-                cameraConfig.sourceHeight,
-                cameraConfig.targetX,
-                cameraConfig.targetY,
-                cameraConfig.targetWidth,
-                cameraConfig.targetHeight
-            )
-            ctx.fillText(
-                moment(capture.timestamp).format("YYYY-MM-DD HH:mm:ss.SSS"),
-                cameraConfig.targetX + textMargin,
-                cameraConfig.targetY + capture.camera.height - textMargin
-            )
+            let textX = cameraConfig.targetX + textMargin
+            let textY = cameraConfig.targetY + cameraConfig.targetHeight - textMargin
+
+            if(capture instanceof Error) {
+                ctx.fillText(capture.message, textX, textY)
+            } else {
+                ctx.drawImage(
+                    capture.image,
+                    cameraConfig.sourceX,
+                    cameraConfig.sourceY,
+                    cameraConfig.sourceWidth,
+                    cameraConfig.sourceHeight,
+                    cameraConfig.targetX,
+                    cameraConfig.targetY,
+                    cameraConfig.targetWidth,
+                    cameraConfig.targetHeight
+                )
+                ctx.fillText(dateToString(capture.timestamp), textX, textY)
+            }
         })
 
         return canvas
