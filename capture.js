@@ -165,10 +165,14 @@ function generateComposite ()
             let cameraConfig = config.cameras[i]
             ctx.drawImage(
                 capture.image,
+                cameraConfig.sourceX,
+                cameraConfig.sourceY,
+                cameraConfig.sourceWidth,
+                cameraConfig.sourceHeight,
                 cameraConfig.targetX,
                 cameraConfig.targetY,
-                capture.camera.width,
-                capture.camera.height
+                cameraConfig.targetWidth,
+                cameraConfig.targetHeight
             )
             ctx.fillText(
                 moment(capture.timestamp).format("YYYY-MM-DD HH:mm:ss.SSS"),
