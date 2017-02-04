@@ -81,7 +81,7 @@ function doIt(i)
         console.log(new Date + " DONE!") // TMP
 
         return Q.Promise((resolve) => {
-            fs.on("finish", () => resolve())
+            out.on("finish", () => resolve())
         })
     })
     .catch((err) => {
