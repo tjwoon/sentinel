@@ -71,35 +71,54 @@ config.cameras.forEach((conf) => {
 // doIt(0)
 
 // TMP
+let writeQueue = [] // { buffer:Buffer, frameNo:int }
 function doIt(i)
 {
-    console.log(new Date + " START " + i + " --------------------") // TMP
+    console.log(new Date + " GRAB  " + i) // TMP
     return generateComposite()
     .then((canvas) => {
-        console.log(new Date + " Writing to disk") // TMP
-        let out = fs.createWriteStream("test-"+i+".jpg")
-        canvas.syncJPEGStream().pipe(out)
-        console.log(new Date + " DONE!") // TMP
-
+        // We have to finish reading from this canvas before we start with a
+        // new canvas, otherwise we get an error from libuv:
+        // `node: ../deps/uv/src/unix/core.c:888: uv__io_stop: Assertion `loop->watchers[w->fd] == w' failed.`
+        // See:
+        // - https://github.com/libuv/libuv/issues/806
+        // - https://github.com/joyent/libuv/issues/1348
+        // - https://github.com/nodejs/node/issues/3604
         return Q.Promise((resolve) => {
-            out.on("finish", () => resolve())
+            let buffers = []
+            let jpegStream = canvas.syncJPEGStream()
+            jpegStream.on("data", (d) => buffers.push(d))
+            jpegStream.on("end", () => {
+                let buf = Buffer.concat(buffers)
+                writeQueue.push({
+                    buffer: buf,
+                    frameNo: i,
+                })
+                resolve()
+            })
         })
     })
-    .catch((err) => {
-        console.log("ERROR: "+err) // TMP
-    })
 }
+function processWriteQueue ()
+{
+    if(writeQueue.length) {
+        let item = writeQueue.shift()
+        fs.writeFileSync("test-"+item.frameNo+".jpg", item.buffer)
+        setTimeout(processWriteQueue, 200)
+    } else {
+        setTimeout(processWriteQueue, 200)
+    }
+}
+processWriteQueue()
 setTimeout(() => { // wait for cameras to finish starting
-    doIt(0)
-    .then(() => doIt(1))
-    .then(() => doIt(2))
-    .then(() => doIt(3))
-    .then(() => doIt(4))
-    .then(() => doIt(5))
-    .then(() => doIt(6))
-    .then(() => doIt(7))
-    .then(() => doIt(8))
-    .then(() => doIt(9))
+    var i = 0
+    function iterate ()
+    {
+        console.log("FRAME "+i)
+        doIt(i++)
+        .then(iterate)
+    }
+    iterate()
 }, 5000)
 
 // Helpers ---------------------------------------------------------------------
