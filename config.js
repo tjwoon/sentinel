@@ -7,28 +7,29 @@
 
 ***/
 
-const camHeight = 544
+const camHeight = 576
+const skip = 108
 
 module.exports = {
-    width: 960, // All cameras must capture at this width!
+    width: 1024, // All cameras must capture at this width!
     cameras: [
         {
             device: "/dev/v4l/by-path/platform-3f980000.usb-usb-0:1.2:1.0-video-index0",
             height: camHeight,
-            skipTop: 92,
-            skipBottom: 92,
+            skipTop: skip,
+            skipBottom: skip,
         },
         {
             device: "/dev/v4l/by-path/platform-3f980000.usb-usb-0:1.3:1.0-video-index0",
             height: camHeight,
-            skipTop: 92,
-            skipBottom: 92,
+            skipTop: skip,
+            skipBottom: skip,
         },
         {
             device: "/dev/v4l/by-path/platform-3f980000.usb-usb-0:1.5:1.0-video-index0",
             height: camHeight,
-            skipTop: 92,
-            skipBottom: 92,
+            skipTop: skip,
+            skipBottom: skip,
         },
     ],
 }
