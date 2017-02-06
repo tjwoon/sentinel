@@ -63,7 +63,9 @@ function doIt(i)
     console.log(new Date + " GRAB  " + i) // TMP
     return generateComposite()
     .then((s) => {
-        setTimeout(() => { s.jpeg().toFile("test-"+i+".jpg") }, 0)
+        setTimeout(() => {
+            s.image.jpeg().toFile("test-"+dateToString(s.earliest)+".jpg")
+        }, 0)
     })
 }
 setTimeout(() => { // wait for cameras to finish starting
@@ -173,18 +175,25 @@ function dateToString (d)
 }
 
 // Grabs a frame from all cameras, then composite them into one large image.
-// Returns a promise for the composite image.
-// :: (void) -> Promise<Sharp, anything>
+// Returns a promise for the composite image and the timestamp of the earliest
+// frame.
+// :: (void) -> Promise<Object, anything>
+// where Object :: {
+//      image: Sharp,
+//      earliest: Date,
+// }
 function generateComposite ()
 {
     const widthTimesChannels = config.width * compositeChannels
     let compositeBuffer = Buffer.allocUnsafe(compositeHeight * widthTimesChannels)
     let offset = 0
+    let earliest = new Date
 
     return Q.all(cameras.map((cam) => grabFrameOrError(cam, 200)))
     .then((captures) => {
         captures.forEach((capture, i) => {
             let conf = config.cameras[i]
+
             let sourceOffset = conf.skipTop * widthTimesChannels
             let copyRows = capture.height - conf.skipTop - conf.skipBottom
             let copyBytes = copyRows * widthTimesChannels
@@ -195,14 +204,21 @@ function generateComposite ()
                 sourceOffset + copyBytes
             )
             offset += copyBytes
+
+            if(capture.timestamp.getTime() < earliest.getTime()) {
+                earliest = capture.timestamp
+            }
         })
 
-        return sharp(compositeBuffer, {
-            raw: {
-                width: config.width,
-                height: compositeHeight,
-                channels: compositeChannels,
-            },
-        })
+        return {
+            image: sharp(compositeBuffer, {
+                raw: {
+                    width: config.width,
+                    height: compositeHeight,
+                    channels: compositeChannels,
+                },
+            }),
+            earliest: earliest,
+        }
     })
 }
