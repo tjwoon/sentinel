@@ -87,10 +87,37 @@ function cleanup ()
     })
 }
 
+// Waits for the promise up to timeout milliseconds. Rejects if the promise is
+// not fulfilled within the timeout.
+// :: (int, Promise<X>) -> Promise<X, anything>
+function promiseWithTimeout (timeout, promise)
+{
+    return Q.Promise((resolve, reject) => {
+        let isDone = false
+        var timer
+
+        timer = setTimeout(() => {
+            if(!isDone) {
+                isDone = true
+                reject(new Error("Timed out after " + timeout + "ms."))
+            }
+        }, timeout)
+
+        promise.then(
+            (x) => {
+                if(!isDone) {
+                    isDone = true
+                    clearTimeout(timer)
+                    resolve(x)
+                }
+            },
+            reject
+        )
+    })
+}
+
 // Grab a frame from the given camera, with a Promise API.
-// If the optional timeout is reached before the frame is captured, rejects
-// the promise.
-// :: (v4l2camera) -> Promise<Object, void>
+// If the timeout is reached before the frame is captured, rejects the promise.
 // :: (v4l2camera, int) -> Promise<Object, void>
 // where Object :: {
 //      "camera": v4l2camera,
@@ -101,57 +128,31 @@ function cleanup ()
 // }
 function grabFrame (cam, timeout)
 {
-    return Q.Promise((resolve, reject) => {
-        let isDone = false
-        var timer
-
-        if(timeout != null) {
-            timer = setTimeout(() => {
-                if(!isDone) {
-                    isDone = true
-                    reject(
-                        new Error(
-                            "Frame capture timed out at "
-                            + dateToString()
-                            + ", after "
-                            + timeout
-                            + "ms."
-                        )
-                    )
-                }
-            }, timeout)
-        }
-
+    return promiseWithTimeout(timeout, Q.Promise((resolve, reject) => {
         cam.capture((success) => {
-            if(isDone) return
+            if(!success) reject()
             else {
-                if(timer !== undefined) clearTimeout(timer)
-                isDone = true
+                let captureTime = new Date
 
-                if(!success) reject()
-                else {
-                    let captureTime = new Date
-
-                    // We need to use the Sharp library to parse the JPEG from
-                    // v4l2camera, because:
-                    // 1. It is an MJPEG frame, which is not entirely valid JPEG.
-                    // 2. It seems to be slightly broken even if we patch it to JPEG.
-                    sharp(new Buffer(cam.frameRaw())) // MJPEG buffer
-                    .raw().toBuffer()
-                    .then((buffer) => { // RGB buffer
-                        resolve({
-                            image: buffer,
-                            width: cam.width,
-                            height: cam.height,
-                            timestamp: captureTime,
-                            camera: cam,
-                        })
+                // We need to use the Sharp library to parse the JPEG from
+                // v4l2camera, because:
+                // 1. It is an MJPEG frame, which is not entirely valid JPEG.
+                // 2. It seems to be slightly broken even if we patch it to JPEG.
+                sharp(new Buffer(cam.frameRaw())) // MJPEG buffer
+                .raw().toBuffer()
+                .then((buffer) => { // RGB buffer
+                    resolve({
+                        image: buffer,
+                        width: cam.width,
+                        height: cam.height,
+                        timestamp: captureTime,
+                        camera: cam,
                     })
-                    .catch(reject)
-                }
+                })
+                .catch(reject)
             }
         })
-    })
+    }))
 }
 
 // Same as grabFrame(), except the promise will be Resolved with any error
