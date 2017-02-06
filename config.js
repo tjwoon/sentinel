@@ -7,51 +7,28 @@
 
 ***/
 
-const camWidth = 960
 const camHeight = 544
 
 module.exports = {
-    outputWidth: 1920,
-    outputHeight: 1080,
+    width: 960, // All cameras must capture at this width!
     cameras: [
         {
             device: "/dev/v4l/by-path/platform-3f980000.usb-usb-0:1.2:1.0-video-index0",
-            width: camWidth,
             height: camHeight,
-            sourceX: 0,
-            sourceY: 2,
-            sourceWidth: 960,
-            sourceHeight: 540,
-            targetX: 0,
-            targetY: 0,
-            targetWidth: 960,
-            targetHeight: 540,
+            skipTop: 92,
+            skipBottom: 92,
         },
         {
             device: "/dev/v4l/by-path/platform-3f980000.usb-usb-0:1.3:1.0-video-index0",
-            width: camWidth,
             height: camHeight,
-            sourceX: 0,
-            sourceY: 2,
-            sourceWidth: 960,
-            sourceHeight: 540,
-            targetX: 960,
-            targetY: 0,
-            targetWidth: 960,
-            targetHeight: 540,
+            skipTop: 92,
+            skipBottom: 92,
         },
         {
             device: "/dev/v4l/by-path/platform-3f980000.usb-usb-0:1.5:1.0-video-index0",
-            width: camWidth,
             height: camHeight,
-            sourceX: 0,
-            sourceY: 2,
-            sourceWidth: 960,
-            sourceHeight: 540,
-            targetX: 0,
-            targetY: 540,
-            targetWidth: 960,
-            targetHeight: 540,
+            skipTop: 92,
+            skipBottom: 92,
         },
     ],
 }

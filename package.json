@@ -9,7 +9,6 @@
   "author": "TJ Woon <tj@cloudsky.org>",
   "license": "UNLICENSED",
   "dependencies": {
-    "canvas": "^1.6.2",
     "moment": "^2.17.1",
     "q": "^1.4.1",
     "sharp": "^0.17.1",

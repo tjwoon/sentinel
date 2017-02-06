@@ -4,12 +4,9 @@
 
 const fs = require("fs") // TMP for testing only
 
-const sharp = require("sharp") // MUST require `sharp` before `canvas`!
-    // See https://github.com/lovell/sharp/issues/371
-const Canvas = require("canvas")
-const Image = Canvas.Image
 const moment = require("moment")
 const Q = require("q")
+const sharp = require("sharp")
 const v4l2camera = require("v4l2camera")
 
 const config = require("./config")
@@ -19,6 +16,11 @@ const exitCodes = require("./exitCodes")
 // Globals ---------------------------------------------------------------------
 
 const cameras = []
+
+const compositeChannels = 3
+const compositeHeight = config.cameras.reduce((n, cam) => {
+    return n + cam.height - cam.skipTop - cam.skipBottom
+}, 0)
 
 
 // Init ------------------------------------------------------------------------
@@ -36,7 +38,7 @@ config.cameras.forEach((conf) => {
         let format = cam.formats[i]
         if(
             format.formatName == "MJPG" &&
-            format.width == conf.width &&
+            format.width == config.width &&
             format.height == conf.height
         ) {
             foundConfig = true
@@ -55,68 +57,22 @@ config.cameras.forEach((conf) => {
 })
 
 
-// TMP grab 10 frames as performance test
-// function doIt (i)
-// {
-//     if(i >= 10) return
-//     else {
-//         console.log((new Date) + "--------------------------------------------")
-//         Q.all(cameras.map(grabFrame))
-//         .then((frames) => {
-//             sharp(frames[0]).toFile("test-"+i+".jpg")
-//             .then(() => doIt(i+1))
-//         })
-//     }
-// }
-// doIt(0)
-
 // TMP
-let writeQueue = [] // { buffer:Buffer, frameNo:int }
 function doIt(i)
 {
     console.log(new Date + " GRAB  " + i) // TMP
     return generateComposite()
-    .then((canvas) => {
-        // We have to finish reading from this canvas before we start with a
-        // new canvas, otherwise we get an error from libuv:
-        // `node: ../deps/uv/src/unix/core.c:888: uv__io_stop: Assertion `loop->watchers[w->fd] == w' failed.`
-        // See:
-        // - https://github.com/libuv/libuv/issues/806
-        // - https://github.com/joyent/libuv/issues/1348
-        // - https://github.com/nodejs/node/issues/3604
-        return Q.Promise((resolve) => {
-            let buffers = []
-            let jpegStream = canvas.syncJPEGStream()
-            jpegStream.on("data", (d) => buffers.push(d))
-            jpegStream.on("end", () => {
-                let buf = Buffer.concat(buffers)
-                writeQueue.push({
-                    buffer: buf,
-                    frameNo: i,
-                })
-                resolve()
-            })
-        })
+    .then((s) => {
+        setTimeout(() => { s.jpeg().toFile("test-"+i+".jpg") }, 0)
     })
 }
-function processWriteQueue ()
-{
-    if(writeQueue.length) {
-        let item = writeQueue.shift()
-        fs.writeFileSync("test-"+item.frameNo+".jpg", item.buffer)
-        setTimeout(processWriteQueue, 200)
-    } else {
-        setTimeout(processWriteQueue, 200)
-    }
-}
-processWriteQueue()
 setTimeout(() => { // wait for cameras to finish starting
     var i = 0
     function iterate ()
     {
         console.log("FRAME "+i)
         doIt(i++)
-        .then(iterate)
+        .finally(iterate)
     }
     iterate()
 }, 5000)
@@ -138,7 +94,9 @@ function cleanup ()
 // :: (v4l2camera, int) -> Promise<Object, void>
 // where Object :: {
 //      "camera": v4l2camera,
-//      "image": Image,
+//      "image": Buffer<RAW>,
+//      "width": int,
+//      "height": int,
 //      "timestamp": Date,
 // }
 function grabFrame (cam, timeout)
@@ -178,18 +136,18 @@ function grabFrame (cam, timeout)
                     // v4l2camera, because:
                     // 1. It is an MJPEG frame, which is not entirely valid JPEG.
                     // 2. It seems to be slightly broken even if we patch it to JPEG.
-                    sharp(new Buffer(cam.frameRaw()))
-                    .jpeg().toBuffer()
-                    .then((buffer) => {
-                        let img = new Image
-                        img.src = buffer
-                        img.dataMode = Image.MODE_MIME
+                    sharp(new Buffer(cam.frameRaw())) // MJPEG buffer
+                    .raw().toBuffer()
+                    .then((buffer) => { // RGB buffer
                         resolve({
-                            image: img,
+                            image: buffer,
+                            width: cam.width,
+                            height: cam.height,
                             timestamp: captureTime,
                             camera: cam,
                         })
                     })
+                    .catch(reject)
                 }
             }
         })
@@ -215,43 +173,35 @@ function dateToString (d)
 
 // Grabs a frame from all cameras, then composite them into one large image.
 // Returns a promise for the composite image.
-// :: (void) -> Promise<Canvas, anything>
+// :: (void) -> Promise<Sharp, anything>
 function generateComposite ()
 {
-    const textMargin = 10 // space between text and edge of image
-
-    let canvas = new Canvas(config.outputWidth, config.outputHeight)
-    let ctx = canvas.getContext("2d")
-    ctx.antialias = "none"
-    ctx.fillStyle = "#ff0000"
-    ctx.font = "16px normal \"sans-serif\""
-    ctx.textDrawingMode = "glyph"
+    const widthTimesChannels = config.width * compositeChannels
+    let compositeBuffer = Buffer.allocUnsafe(compositeHeight * widthTimesChannels)
+    let offset = 0
 
     return Q.all(cameras.map((cam) => grabFrameOrError(cam, 200)))
     .then((captures) => {
         captures.forEach((capture, i) => {
-            let cameraConfig = config.cameras[i]
-            let textX = cameraConfig.targetX + textMargin
-            let textY = cameraConfig.targetY + cameraConfig.targetHeight - textMargin
-
-            if(capture instanceof Error) {
-                ctx.fillText(capture.message, textX, textY)
-            } else {
-                ctx.drawImage(
-                    capture.image,
-                    cameraConfig.sourceX,
-                    cameraConfig.sourceY,
-                    cameraConfig.sourceWidth,
-                    cameraConfig.sourceHeight,
-                    cameraConfig.targetX,
-                    cameraConfig.targetY,
-                    cameraConfig.targetWidth,
-                    cameraConfig.targetHeight
-                )
-                ctx.fillText(dateToString(capture.timestamp), textX, textY)
-            }
+            let conf = config.cameras[i]
+            let sourceOffset = conf.skipTop * widthTimesChannels
+            let copyRows = capture.height - conf.skipTop - conf.skipBottom
+            let copyBytes = copyRows * widthTimesChannels
+            capture.image.copy(
+                compositeBuffer,
+                offset,
+                sourceOffset,
+                sourceOffset + copyBytes
+            )
+            offset += copyBytes
         })
 
-        return canvas
+        return sharp(compositeBuffer, {
+            raw: {
+                width: config.width,
+                height: compositeHeight,
+                channels: compositeChannels,
+            },
+        })
     })
 }
