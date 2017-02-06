@@ -171,7 +171,7 @@ function grabFrameOrError ()
 // :: (Date) -> String
 function dateToString (d)
 {
-    return moment(d).format("YYYY-MM-DD HH:mm:ss.SSS")
+    return moment(d).format("YYYY-MM-DDTHH-mm-ss.SSSZZ")
 }
 
 // Grabs a frame from all cameras, then composite them into one large image.
