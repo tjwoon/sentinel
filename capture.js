@@ -60,19 +60,22 @@ config.cameras.forEach((conf) => {
 // TMP
 function doIt(i)
 {
-    console.log(new Date + " GRAB  " + i) // TMP
     return generateComposite()
-    .then((s) => {
-        setTimeout(() => {
-            s.image.jpeg().toFile("test-"+dateToString(s.earliest)+".jpg")
-        }, 0)
-    })
+    .then(
+        (s) => {
+            let time = dateToString(s.earliest)
+            console.log("------------------------ WRITE #" + i + " - " + time) // TMP
+            s.image.jpeg().toFile("test-"+time+".jpg")
+        },
+        (e) => {
+            console.log("------------------------ ERROR #" + i + " - " + e)
+        }
+    )
 }
 setTimeout(() => { // wait for cameras to finish starting
     var i = 0
     function iterate ()
     {
-        console.log("FRAME "+i)
         doIt(i++)
         .finally(iterate)
     }
@@ -185,8 +188,9 @@ function dateToString (d)
 function generateComposite ()
 {
     const widthTimesChannels = config.width * compositeChannels
-    let compositeBuffer = Buffer.allocUnsafe(compositeHeight * widthTimesChannels)
+    let compositeBuffer = Buffer.alloc(compositeHeight * widthTimesChannels)
     let offset = 0
+    let hasFrames = false
     let earliest = new Date
 
     return Q.all(cameras.map((cam) => grabFrameOrError(cam, 200)))
@@ -195,30 +199,36 @@ function generateComposite ()
             let conf = config.cameras[i]
 
             let sourceOffset = conf.skipTop * widthTimesChannels
-            let copyRows = capture.height - conf.skipTop - conf.skipBottom
+            let copyRows = conf.height - conf.skipTop - conf.skipBottom
             let copyBytes = copyRows * widthTimesChannels
-            capture.image.copy(
-                compositeBuffer,
-                offset,
-                sourceOffset,
-                sourceOffset + copyBytes
-            )
-            offset += copyBytes
-
-            if(capture.timestamp.getTime() < earliest.getTime()) {
-                earliest = capture.timestamp
+            if(!(capture instanceof Error)) {
+                hasFrames = true
+                capture.image.copy(
+                    compositeBuffer,
+                    offset,
+                    sourceOffset,
+                    sourceOffset + copyBytes
+                )
+                if(capture.timestamp.getTime() < earliest.getTime()) {
+                    earliest = capture.timestamp
+                }
             }
+            offset += copyBytes
         })
 
-        return {
-            image: sharp(compositeBuffer, {
-                raw: {
-                    width: config.width,
-                    height: compositeHeight,
-                    channels: compositeChannels,
-                },
-            }),
-            earliest: earliest,
+        if(!hasFrames) {
+            throw new Error ("No frames captured for composite image.")
+        } else {
+            return {
+                image: sharp(compositeBuffer, {
+                    raw: {
+                        width: config.width,
+                        height: compositeHeight,
+                        channels: compositeChannels,
+                    },
+                }),
+                earliest: earliest,
+            }
         }
     })
 }
