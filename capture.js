@@ -123,7 +123,7 @@ function promiseWithTimeout (timeout, promise)
 
 // Grab a frame from the given camera, with a Promise API.
 // If the timeout is reached before the frame is captured, rejects the promise.
-// :: (v4l2camera, int) -> Promise<Object, void>
+// :: (v4l2camera, int) -> Promise<Object, anything>
 // where Object :: {
 //      "camera": v4l2camera,
 //      "image": Buffer<RAW>,
@@ -166,7 +166,10 @@ function grabFrame (cam, timeout)
 function grabFrameOrError ()
 {
     return grabFrame.apply(this, arguments)
-    .catch((err) => err)
+    .catch((err) => {
+        if(err instanceof Error) return err
+        else return new Error("Failed to grab frame.")
+    })
 }
 
 // Formats a Date or moment-compatible value to a datetime string.
