@@ -39,10 +39,12 @@ config.cameras.forEach((conf) => {
         if(
             format.formatName == "MJPG" &&
             format.width == config.width &&
-            format.height == conf.height
+            format.height == conf.height &&
+            format.interval.denominator / format.interval.numerator == conf.fps
         ) {
             foundConfig = true
             cam.configSet(format)
+            console.log("Camera #"+i+" using format: "+JSON.stringify(format))
             break
         }
     }

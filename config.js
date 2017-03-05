@@ -18,18 +18,21 @@ module.exports = {
             height: camHeight,
             skipTop: skip,
             skipBottom: skip,
+            fps: 15,
         },
         {
             device: "/dev/v4l/by-path/platform-3f980000.usb-usb-0:1.3:1.0-video-index0",
             height: camHeight,
             skipTop: skip,
             skipBottom: skip,
+            fps: 15,
         },
         {
             device: "/dev/v4l/by-path/platform-3f980000.usb-usb-0:1.5:1.0-video-index0",
             height: camHeight,
             skipTop: skip,
             skipBottom: skip,
+            fps: 15,
         },
     ],
 }
