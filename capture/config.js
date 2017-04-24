@@ -2,6 +2,13 @@
 
 Note: This is not a JSON file because we want comments, variables, etc!
 
+You can find out your webcam's supported video formats and resolutions via the
+command line:
+
+```
+$ v4l2-ctl -d /dev/v4l/by-path/platform-3f980000.usb-usb-0:1.3:1.0-video-index0 --list-formats
+$ v4l2-ctl -d /dev/v4l/by-path/platform-3f980000.usb-usb-0:1.3:1.0-video-index0 --list-formats-ext
+```
 
 ***/
 
