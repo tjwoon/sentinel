@@ -9,8 +9,10 @@
   "author": "TJ Woon <tj@cloudsky.org>",
   "license": "GPL-3.0",
   "dependencies": {
+    "lodash": "^4.17.4",
     "moment": "^2.17.1",
     "q": "^1.4.1",
+    "request": "^2.81.0",
     "sharp": "^0.17.1",
     "v4l2camera": "^1.0.4"
   }
