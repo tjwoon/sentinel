@@ -10,6 +10,7 @@ const sharp = require("sharp")
 const v4l2camera = require("v4l2camera")
 
 const camConfig = require("./config")
+const config = require("../config")
 const exitCodes = require("./exitCodes")
 
 
@@ -58,31 +59,16 @@ camConfig.cameras.forEach((conf) => {
     cameras.push(cam)
 })
 
-
-// TMP
-function doIt(i)
-{
-    return generateComposite()
-    .then(
-        (s) => {
-            let time = dateToString(s.earliest)
-            console.log("------------------------ WRITE #" + i + " - " + time) // TMP
-            s.image.jpeg().toFile("test-"+time+".jpg")
-        },
-        (e) => {
-            console.log("------------------------ ERROR #" + i + " - " + e)
-        }
-    )
-}
 setTimeout(() => { // wait for cameras to finish starting
-    var i = 0
-    function iterate ()
+    function doOneStep ()
     {
-        doIt(i++)
-        .finally(iterate)
+        return saveCompositeFrame()
+        .finally(doOneStep)
     }
-    iterate()
-}, 5000)
+
+    // Start saving frames to the filesystem.
+    doOneStep()
+}, camConfig.camInitDelay)
 
 // Helpers ---------------------------------------------------------------------
 
@@ -236,4 +222,18 @@ function generateComposite ()
             }
         }
     })
+}
+
+function saveCompositeFrame ()
+{
+    return generateComposite()
+    .then(
+        (s) => {
+            let time = dateToString(s.earliest)
+            s.image.jpeg().toFile(config.webcamOutputDirectory + '/' + time + '.jpg')
+        },
+        (e) => {
+            console.error('ERROR Failed to capture a composite frame: ' + e)
+        }
+    )
 }

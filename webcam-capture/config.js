@@ -21,6 +21,7 @@ const camHeight = 448
 const skip = 0
 
 module.exports = {
+    camInitDelay: 5000, // Allow this amount of time for all cameras to complete initialisation
     width: 800, // All cameras must capture at this width!
     cameras: [
         {
