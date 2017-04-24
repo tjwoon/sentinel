@@ -9,7 +9,7 @@ const Q = require("q")
 const sharp = require("sharp")
 const v4l2camera = require("v4l2camera")
 
-const config = require("./config")
+const camConfig = require("./config")
 const exitCodes = require("./exitCodes")
 
 
@@ -18,7 +18,7 @@ const exitCodes = require("./exitCodes")
 const cameras = []
 
 const compositeChannels = 3
-const compositeHeight = config.cameras.reduce((n, cam) => {
+const compositeHeight = camConfig.cameras.reduce((n, cam) => {
     return n + cam.height - cam.skipTop - cam.skipBottom
 }, 0)
 
@@ -30,7 +30,7 @@ process.on("SIGINT", cleanup)
 process.on("SIGHUP", cleanup)
 
 // Initialise all of our cameras
-config.cameras.forEach((conf) => {
+camConfig.cameras.forEach((conf) => {
     let cam = new v4l2camera.Camera(conf.device)
 
     let foundConfig = false
@@ -38,7 +38,7 @@ config.cameras.forEach((conf) => {
         let format = cam.formats[i]
         if(
             format.formatName == "MJPG" &&
-            format.width == config.width &&
+            format.width == camConfig.width &&
             format.height == conf.height &&
             format.interval.denominator / format.interval.numerator == conf.fps
         ) {
@@ -192,7 +192,7 @@ function dateToString (d)
 // }
 function generateComposite ()
 {
-    const widthTimesChannels = config.width * compositeChannels
+    const widthTimesChannels = camConfig.width * compositeChannels
     let compositeBuffer = Buffer.alloc(compositeHeight * widthTimesChannels)
     let offset = 0
     let hasFrames = false
@@ -201,7 +201,7 @@ function generateComposite ()
     return Q.all(cameras.map((cam) => grabFrameOrError(cam, 200)))
     .then((captures) => {
         captures.forEach((capture, i) => {
-            let conf = config.cameras[i]
+            let conf = camConfig.cameras[i]
 
             let sourceOffset = conf.skipTop * widthTimesChannels
             let copyRows = conf.height - conf.skipTop - conf.skipBottom
@@ -227,7 +227,7 @@ function generateComposite ()
             return {
                 image: sharp(compositeBuffer, {
                     raw: {
-                        width: config.width,
+                        width: camConfig.width,
                         height: compositeHeight,
                         channels: compositeChannels,
                     },
