@@ -2,8 +2,6 @@
 
 // Imports ---------------------------------------------------------------------
 
-const fs = require("fs") // TMP for testing only
-
 const moment = require("moment")
 const Q = require("q")
 const sharp = require("sharp")
