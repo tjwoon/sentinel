@@ -1,7 +1,7 @@
-Camera Capture
-==============
+Camera Capture: Webcam
+======================
 
-Program to capture frames from configured webcams.
+Program to continuously capture frames from configured webcams.
 
 The webcams are expected to be normal consumer grade cameras, connected to the
 Pi via V4l2.
